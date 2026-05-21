@@ -1,0 +1,235 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  SUPERADMIN
+  WORKER
+  IMAM
+  USER
+}
+
+enum QuestionStatus {
+  OPEN
+  IN_PROGRESS
+  ESCALATED
+  ANSWERED
+  CLOSED
+}
+
+enum SenderRole {
+  USER
+  WORKER
+  IMAM
+  SYSTEM
+}
+
+enum SessionStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum SessionMode {
+  IN_PERSON
+  VIDEO
+}
+
+enum Urgency {
+  URGENT
+  REGULAR
+}
+
+// ─── Mosque ───────────────────────────────────────────────────────────────────
+
+model Mosque {
+  id              String   @id @default(cuid())
+  name            String
+  address         String
+  logoUrl         String?
+  primaryLanguage String   @default("en")
+  createdAt       DateTime @default(now())
+
+  users      User[]
+  faqEntries FaqEntry[]
+}
+
+// ─── User ─────────────────────────────────────────────────────────────────────
+// The `id` matches the Supabase Auth user UUID so we can join on auth.uid().
+
+model User {
+  id        String   @id // matches Supabase auth.users.id
+  email     String   @unique
+  name      String
+  role      Role     @default(USER)
+  mosqueId  String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  mosque          Mosque?          @relation(fields: [mosqueId], references: [id])
+  questions       Question[]
+  messagesSent    Message[]        @relation("SenderMessages")
+  escalations     EscalationNote[]
+  imamSessions    Session[]        @relation("ImamSessions")
+  userSessions    Session[]        @relation("UserSessions")
+  repeatingBlocks RepeatingBlock[]
+  oneOffBlocks    OneOffBlock[]
+  notifications   Notification[]
+}
+
+// ─── Question & Messaging ─────────────────────────────────────────────────────
+
+model Question {
+  id           String         @id @default(cuid())
+  userId       String?
+  sessionToken String? // UUID for anonymous questions
+  category     String
+  content      String
+  status       QuestionStatus @default(OPEN)
+  mosqueId     String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user           User?           @relation(fields: [userId], references: [id])
+  messages       Message[]
+  escalationNote EscalationNote?
+
+  @@index([status])
+  @@index([sessionToken])
+}
+
+model Message {
+  id         String     @id @default(cuid())
+  questionId String
+  senderId   String?
+  senderRole SenderRole
+  content    String
+  createdAt  DateTime   @default(now())
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  sender   User?    @relation("SenderMessages", fields: [senderId], references: [id])
+}
+
+model EscalationNote {
+  id         String   @id @default(cuid())
+  questionId String   @unique
+  workerId   String
+  note       String
+  createdAt  DateTime @default(now())
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  worker   User     @relation(fields: [workerId], references: [id])
+}
+
+// ─── FAQ ──────────────────────────────────────────────────────────────────────
+
+model FaqEntry {
+  id         String   @id @default(cuid())
+  mosqueId   String
+  category   String
+  question   String
+  answer     String
+  orderIndex Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  mosque Mosque @relation(fields: [mosqueId], references: [id])
+
+  @@index([mosqueId, category])
+}
+
+// ─── Availability & Agenda ───────────────────────────────────────────────────
+
+// Times are stored as "HH:mm" strings. Dates are stored as "YYYY-MM-DD" strings.
+// This avoids timezone confusion in a serverless environment.
+
+model RepeatingBlock {
+  id        String  @id @default(cuid())
+  imamId    String
+  weekday   Int // 0=Monday … 6=Sunday
+  startTime String // HH:mm
+  endTime   String // HH:mm
+  startDate String // YYYY-MM-DD
+  endDate   String? // YYYY-MM-DD (null = no end)
+
+  imam      User            @relation(fields: [imamId], references: [id])
+  overrides BlockOverride[]
+
+  @@index([imamId])
+}
+
+model BlockOverride {
+  id               String  @id @default(cuid())
+  repeatingBlockId String
+  occurrenceDate   String // YYYY-MM-DD
+  startTime        String // HH:mm (ignored when isDeleted = true)
+  endTime          String // HH:mm (ignored when isDeleted = true)
+  isDeleted        Boolean @default(false)
+
+  repeatingBlock RepeatingBlock @relation(fields: [repeatingBlockId], references: [id], onDelete: Cascade)
+
+  @@unique([repeatingBlockId, occurrenceDate])
+}
+
+model OneOffBlock {
+  id        String @id @default(cuid())
+  imamId    String
+  date      String // YYYY-MM-DD
+  startTime String // HH:mm
+  endTime   String // HH:mm
+
+  imam User @relation(fields: [imamId], references: [id])
+
+  @@index([imamId, date])
+}
+
+// ─── Session ──────────────────────────────────────────────────────────────────
+
+model Session {
+  id                 String        @id @default(cuid())
+  userId             String
+  imamId             String
+  date               String // YYYY-MM-DD
+  startTime          String // HH:mm
+  endTime            String // HH:mm
+  durationMinutes    Int
+  topic              String
+  urgency            Urgency
+  mode               SessionMode
+  status             SessionStatus @default(PENDING)
+  cancellationReason String?
+  cancelledBy        String? // user id of the cancelling party
+  videoLink          String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  user User @relation("UserSessions", fields: [userId], references: [id])
+  imam User @relation("ImamSessions", fields: [imamId], references: [id])
+
+  @@index([imamId, date])
+  @@index([userId])
+  @@index([status])
+}
+
+// ─── Notification ─────────────────────────────────────────────────────────────
+
+model Notification {
+  id       String   @id @default(cuid())
+  userId   String
+  type     String
+  sentAt   DateTime @default(now())
+  metadata Json
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}

@@ -1,17 +1,14 @@
-import { createBrowserClient } from "@supabase/ssr";
+/**
+ * SERVER-ONLY Supabase helpers.
+ * This file imports next/headers, so it must NEVER be imported by a Client Component.
+ * For client components, import from "@/lib/supabase-browser" instead.
+ */
+
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 
-// ─── Browser client (use in Client Components) ────────────────────────────────
-
-export function createSupabaseBrowserClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-}
-
-// ─── Server client (use in Server Components, Route Handlers, Server Actions) ─
+// ─── Server client (Server Components, Route Handlers, Server Actions) ────────
 
 export async function createSupabaseServerClient() {
   const cookieStore = await cookies();
@@ -28,14 +25,14 @@ export async function createSupabaseServerClient() {
           try {
             cookieStore.set({ name, value, ...options });
           } catch {
-            // Server Components cannot set cookies; ignore silently
+            // Server Components cannot set cookies — safe to ignore
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
             cookieStore.set({ name, value: "", ...options });
           } catch {
-            // Server Components cannot set cookies; ignore silently
+            // Server Components cannot set cookies — safe to ignore
           }
         },
       },
@@ -43,10 +40,9 @@ export async function createSupabaseServerClient() {
   );
 }
 
-// ─── Service-role admin client (server-only, never expose to client) ──────────
+// ─── Service-role admin client (server-only, NEVER send to client) ────────────
 
 export function createSupabaseAdminClient() {
-  const { createClient } = require("@supabase/supabase-js");
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,

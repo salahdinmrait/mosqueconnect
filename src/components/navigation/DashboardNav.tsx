@@ -14,7 +14,7 @@ import {
   MessageSquare,
   Clock,
 } from "lucide-react";
-import { createSupabaseBrowserClient } from "@/lib/supabase";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { ROUTES } from "@/lib/constants";
 import type { Role } from "@/types";
 

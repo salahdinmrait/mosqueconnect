@@ -1,15 +1,19 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Inter is the standard system-quality sans-serif available in next/font since v13
+const inter = Inter({
+  variable: "--font-geist-sans", // keep CSS var name so tailwind.config picks it up unchanged
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
+// JetBrains Mono as the code/mono font — available in Next.js 14
+const jetbrainsMono = JetBrains_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -26,7 +30,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} font-sans min-h-screen`}
+        className={`${inter.variable} ${jetbrainsMono.variable} font-sans min-h-screen`}
       >
         {children}
       </body>

@@ -23,6 +23,9 @@ prisma/migrations/
 *.swp
 *.swo
 
+# Claude Code
+.claude/
+
 # Logs
 *.log
 npm-debug.log*
